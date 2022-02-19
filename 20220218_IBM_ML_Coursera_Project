@@ -1,0 +1,161 @@
+import itertools
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import NullFormatter
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.ticker as ticker
+from sklearn import preprocessing
+import wget
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn import metrics
+from sklearn.metrics import jaccard_score
+from sklearn.metrics import f1_score
+from sklearn.metrics import log_loss
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import svm
+import scipy.optimize as opt
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import log_loss
+from sklearn.metrics import log_loss
+
+# %matplotlib inline
+
+url = 'https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBMDeveloperSkillsNetwork-ML0101EN-SkillsNetwork/labs/FinalModule_Coursera/data/loan_train.csv'
+filename_train = wget.download(url)
+
+# file_train = 'loan_train.csv'
+df_train = pd.read_csv(filename_train)
+
+df_train['due_date'] = pd.to_datetime(df_train['due_date'])
+df_train['effective_date'] = pd.to_datetime(df_train['effective_date'])
+df_train['dayofweek'] = df_train['effective_date'].dt.dayofweek
+df_train['weekend'] = df_train['dayofweek'].apply(lambda x: 1 if (x>3) else 0)
+
+### Convert Categorical features to numerical values ###
+df_train.groupby(['Gender'])['loan_status'].value_counts(normalize=True)
+df_train['Gender'].replace(to_replace=['male','female'], value=[0,1],inplace=True)
+
+# One Hot Encoding
+df_train.groupby(['education'])['loan_status'].value_counts(normalize=True)
+
+Feature = df_train[['Principal','terms','age','Gender','weekend']]
+Feature = pd.concat([Feature,pd.get_dummies(df_train['education'])], axis=1)
+Feature.drop(['Master or Above'], axis = 1,inplace=True)
+
+# Feature selection
+X = Feature
+y = df_train['loan_status'].values
+X= preprocessing.StandardScaler().fit(X).transform(X)
+
+# K Nearest Neighbor(KNN)
+# --------------------------------------------------------------------------
+X_train, X_test, y_train, y_test = train_test_split( X, y, test_size=0.2, random_state=4)
+
+Ks = 10
+mean_acc = np.zeros((Ks-1))
+std_acc = np.zeros((Ks-1))
+
+for n in range(1, Ks):
+    #Train Model and Predict
+    neigh = KNeighborsClassifier(n_neighbors = n).fit(X_train, y_train)
+    yhat_knn = neigh.predict(X_test)
+    mean_acc[n-1] = metrics.accuracy_score(y_test, yhat_knn)
+    std_acc[n-1] = np.std(yhat_knn == y_test)/np.sqrt(yhat_knn.shape[0])
+
+    # print("The best accuracy was with", mean_acc.max(), "with k=", mean_acc.argmax()+1)
+    #
+    # plt.plot(range(1, Ks), mean_acc, 'g')
+    # plt.fill_between(range(1,Ks), mean_acc - 1 * std_acc, mean_acc + 1 * std_acc, alpha=0.10)
+    # plt.fill_between(range(1,Ks), mean_acc - 3 * std_acc, mean_acc + 3 * std_acc, alpha=0.10, color="green")
+    # plt.legend(('Accuracy ', '+/- 1xstd','+/- 3xstd'))
+    # plt.ylabel('Accuracy ')
+    # plt.xlabel('Number of Neighbors (K)')
+    # plt.tight_layout()
+    # plt.show()
+
+# KNN evlauation
+url = 'https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/ML0101ENv3/labs/loan_test.csv'
+filename_test = wget.download(url)
+df_test = pd.read_csv(filename_test)
+
+df_test['due_date'] = pd.to_datetime(df_test['due_date'])
+df_test['effective_date'] = pd.to_datetime(df_test['effective_date'])
+df_test['dayofweek'] = df_test['effective_date'].dt.dayofweek
+df_test['weekend'] = df_test['dayofweek'].apply(lambda x: 1 if (x>3) else 0)
+
+### Convert Categorical features to numerical values ###
+df_test.groupby(['Gender'])['loan_status'].value_counts(normalize=True)
+df_test['Gender'].replace(to_replace=['male','female'], value=[0,1],inplace=True)
+
+# One Hot Encoding
+df_test.groupby(['education'])['loan_status'].value_counts(normalize=True)
+
+Feature = df_test[['Principal','terms','age','Gender','weekend']]
+Feature = pd.concat([Feature,pd.get_dummies(df_test['education'])], axis=1)
+Feature.drop(['Master or Above'], axis = 1,inplace=True)
+
+# Feature selection
+X_test = Feature
+
+y_test = df_test['loan_status'].values
+loan_stat = preprocessing.LabelEncoder()
+loan_stat.fit(['COLLECTION', 'PAIDOFF'])
+y_test = loan_stat.transform(y_test)
+
+X_test = preprocessing.StandardScaler().fit(X_test).transform(X_test)
+
+k = 7
+neigh = KNeighborsClassifier(n_neighbors = k).fit(X_test, y_test)
+yhat = neigh.predict(X_test)
+
+print("\n")
+print("KNN Test set Accuracy: ", metrics.accuracy_score(y_test, yhat))
+print("KNN Test set Jaccard Score:", jaccard_score(y_test, yhat))
+print("KNN Test set f1 Score:", f1_score(y_test, yhat))
+# --------------------------------------------------------------------------
+# Decision Tree
+# --------------------------------------------------------------------------
+loanTree = DecisionTreeClassifier(criterion="entropy", max_depth = 4)
+
+loan_stat = preprocessing.LabelEncoder()
+loan_stat.fit(['COLLECTION', 'PAIDOFF'])
+y_train = loan_stat.transform(y_train)
+
+loanTree.fit(X_train, y_train)
+
+yhat = loanTree.predict(X_test)
+
+print("\n")
+print("Decision Tree Test set Accuracy: ", metrics.accuracy_score(y_test, yhat))
+print("Decision Tree Test set Jaccard Score:", jaccard_score(y_test, yhat))
+print("Decision Tree Test set f1 Score:", f1_score(y_test, yhat))
+# --------------------------------------------------------------------------
+# Support vector machine
+# --------------------------------------------------------------------------
+
+clf = svm.SVC(kernel='linear')
+clf.fit(X_train, y_train)
+
+yhat = clf.predict(X_test)
+
+print("\n")
+print("SVM Test set Accuracy: ", metrics.accuracy_score(y_test, yhat))
+print("SVM Test set Jaccard Score:", jaccard_score(y_test, yhat))
+print("SVM Test set f1 Score:", f1_score(y_test, yhat))
+# --------------------------------------------------------------------------
+# Logistic Regression
+# --------------------------------------------------------------------------
+LR = LogisticRegression(C=0.01, solver='liblinear').fit(X_train,y_train)
+yhat = LR.predict(X_test)
+yhat_prob = LR.predict_proba(X_test)
+
+print("\n")
+print("Logistic Regression Test set Accuracy: ", metrics.accuracy_score(y_test, yhat))
+print("Logistic Regression Test set Jaccard Score:", jaccard_score(y_test, yhat))
+print("Logistic Regression Test set f1 Score:", f1_score(y_test, yhat))
+print("Logistic Regression Test set log loss Score:", log_loss(y_test, yhat_prob))
+
